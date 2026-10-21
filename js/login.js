@@ -2,6 +2,16 @@ const loginForm = document.getElementById("loginForm");
 const loginMessage = document.getElementById("loginMessage");
 const loginButton = document.getElementById("loginButton");
 
+async function redirectIfLoggedIn() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+
+    if (session) {
+        window.location.replace("dashboard.html");
+    }
+}
+
+redirectIfLoggedIn();
+
 loginForm.addEventListener("submit", async function (event) {
     event.preventDefault();
 
@@ -31,10 +41,10 @@ loginForm.addEventListener("submit", async function (event) {
         return;
     }
 
-    console.log("Login successful:", data);
-
     loginMessage.className = "alert alert-success";
-    loginMessage.textContent = "Login successful!";
+    loginMessage.textContent = "Login successful! Opening your dashboard...";
 
     loginButton.textContent = "Success";
+
+    window.location.replace("dashboard.html");
 });

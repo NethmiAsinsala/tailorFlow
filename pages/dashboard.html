@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6c4cf1">
+
+    <title>Dashboard - TailorFlow</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body class="dashboard-page">
+    <header class="app-header">
+        <div class="container dashboard-shell py-3 d-flex align-items-center justify-content-between">
+            <a class="d-flex align-items-center gap-2 text-decoration-none text-dark" href="dashboard.html">
+                <span class="brand-mark" aria-hidden="true">TF</span>
+                <span class="fw-bold fs-5 brand-title">TailorFlow</span>
+            </a>
+
+            <button class="btn btn-light border rounded-pill px-3" id="logoutButton" type="button">
+                Log out
+            </button>
+        </div>
+    </header>
+
+    <main class="container dashboard-shell py-4 py-md-5">
+        <section class="welcome-panel p-4 p-md-5 mb-4" aria-labelledby="welcomeTitle">
+            <div class="welcome-copy">
+                <p class="text-white-50 mb-2" id="todayDate"></p>
+                <h1 class="h2 fw-bold mb-2" id="welcomeTitle">Good day</h1>
+                <p class="mb-0 text-white-50">Here’s what’s happening in your shop today.</p>
+            </div>
+        </section>
+
+        <section class="mb-4" aria-labelledby="overviewTitle">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <div>
+                    <p class="eyebrow">Overview</p>
+                    <h2 class="section-title" id="overviewTitle">Business at a glance</h2>
+                </div>
+                <small class="text-muted" id="syncStatus" role="status">Loading…</small>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-6 col-lg-3">
+                    <article class="stat-card p-3 p-md-4">
+                        <div class="stat-icon" aria-hidden="true">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>
+                        </div>
+                        <p class="stat-value loading-shimmer" id="todayOrders">0</p>
+                        <p class="stat-label">Today’s orders</p>
+                    </article>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <article class="stat-card p-3 p-md-4">
+                        <div class="stat-icon warning" aria-hidden="true">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/></svg>
+                        </div>
+                        <p class="stat-value loading-shimmer" id="pendingOrders">0</p>
+                        <p class="stat-label">Pending orders</p>
+                    </article>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <article class="stat-card p-3 p-md-4">
+                        <div class="stat-icon info" aria-hidden="true">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <p class="stat-value loading-shimmer" id="customerCount">0</p>
+                        <p class="stat-label">Customers</p>
+                    </article>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <article class="stat-card p-3 p-md-4">
+                        <div class="stat-icon success" aria-hidden="true">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1v22m5-18H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        </div>
+                        <p class="stat-value loading-shimmer" id="paymentsReceived">Rs. 0</p>
+                        <p class="stat-label">Payments received</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="mb-4" aria-labelledby="quickLinksTitle">
+            <div class="mb-3">
+                <p class="eyebrow">Shortcuts</p>
+                <h2 class="section-title" id="quickLinksTitle">Quick actions</h2>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <a class="quick-card is-placeholder" href="#orders" aria-label="Orders page coming next">
+                        <span class="quick-icon" aria-hidden="true">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>
+                        </span>
+                        <span><strong class="d-block">Orders</strong><small class="text-muted">Manage customer orders</small></span>
+                        <span class="quick-arrow" aria-hidden="true">›</span>
+                    </a>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <a class="quick-card is-placeholder" href="#measurements" aria-label="Measurements page coming next">
+                        <span class="quick-icon" aria-hidden="true">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7h18v10H3zM7 7v4m4-4v2m4-2v4m4-4v2"/></svg>
+                        </span>
+                        <span><strong class="d-block">Measurements</strong><small class="text-muted">View saved measurements</small></span>
+                        <span class="quick-arrow" aria-hidden="true">›</span>
+                    </a>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <a class="quick-card is-placeholder" href="#inventory" aria-label="Inventory page coming next">
+                        <span class="quick-icon" aria-hidden="true">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m3 7 9-4 9 4-9 4-9-4Zm0 5 9 4 9-4M3 17l9 4 9-4"/></svg>
+                        </span>
+                        <span><strong class="d-block">Inventory</strong><small class="text-muted">Check materials and stock</small></span>
+                        <span class="quick-arrow" aria-hidden="true">›</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel-card p-4" aria-labelledby="nextStepTitle">
+            <div class="empty-state py-3">
+                <div class="stat-icon mx-auto mb-3" aria-hidden="true">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M5.1 19h13.8a2 2 0 0 0 1.73-3L13.73 4a2 2 0 0 0-3.46 0L3.37 16a2 2 0 0 0 1.73 3Z"/></svg>
+                </div>
+                <h2 class="section-title mb-2" id="nextStepTitle">Ready for your first order</h2>
+                <p class="mb-0">Orders will appear here after the Orders module is added.</p>
+            </div>
+        </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Main navigation">
+        <div class="bottom-nav-inner">
+            <a class="nav-action active" href="dashboard.html" aria-current="page">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9Z"/></svg>
+                Home
+            </a>
+            <a class="nav-action" href="#orders">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3h10l2 3v15H5V6l2-3Zm-2 4h14M9 11h6"/></svg>
+                Orders
+            </a>
+            <a class="nav-action" href="#customers">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg>
+                Customers
+            </a>
+            <a class="nav-action" href="#inventory">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m3 7 9-4 9 4-9 4-9-4Zm0 5 9 4 9-4"/></svg>
+                Inventory
+            </a>
+        </div>
+    </nav>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/supabase.js"></script>
+    <script src="../js/dashboard.js"></script>
+</body>
+</html>
