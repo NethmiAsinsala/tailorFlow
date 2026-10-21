@@ -47,10 +47,15 @@ create table if not exists public.tf_measurements (
     garment_length numeric(7,2),
     neck numeric(7,2),
     inseam numeric(7,2),
+    extra_values jsonb not null default '{}'::jsonb,
     notes text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+-- Upgrade tf_measurements when this schema is rerun after an earlier version.
+alter table public.tf_measurements
+add column if not exists extra_values jsonb not null default '{}'::jsonb;
 
 create table if not exists public.tf_inventory (
     id uuid primary key default gen_random_uuid(),

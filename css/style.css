@@ -909,6 +909,8 @@ textarea.form-control {
 }
 
 .app-modal {
+    max-height: calc(100vh - 1rem);
+    overflow: hidden;
     border: 0;
     border-radius: 1.25rem;
     box-shadow: 0 1.5rem 4rem rgba(43, 0, 31, 0.22);
@@ -929,8 +931,51 @@ textarea.form-control {
     padding: 1.25rem 1.4rem;
 }
 
+.app-modal .modal-body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
 .app-modal .modal-footer {
+    position: sticky;
+    z-index: 2;
+    bottom: 0;
     border-top-color: var(--border);
+    background: #fff;
+    box-shadow: 0 -0.6rem 1.5rem rgba(43, 0, 31, 0.05);
+}
+
+.measurement-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--gold-600);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.measurement-divider::before,
+.measurement-divider::after {
+    content: "";
+    height: 1px;
+    flex: 1;
+    background: var(--border);
+}
+
+.field-unit {
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.measurement-form-empty {
+    padding: 1rem;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 0.75rem;
+    background: #fffbf6;
+    text-align: center;
 }
 
 .app-toast {

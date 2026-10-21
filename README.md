@@ -23,6 +23,10 @@ A mobile-first tailoring business manager powered by Supabase.
 The schema uses namespaced `tf_*` table names, so it does not alter or delete
 older TailorFlow tables that may already exist in the same Supabase project.
 
+For an installation created before dynamic garment measurements were added,
+run [`supabase/add-dynamic-measurements.sql`](supabase/add-dynamic-measurements.sql)
+once in the Supabase SQL Editor.
+
 ## Run locally
 
 Use the VS Code Live Server extension, or run:

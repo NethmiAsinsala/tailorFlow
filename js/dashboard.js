@@ -10,7 +10,9 @@ const appState = {
         orders: [],
         measurements: [],
         inventory: [],
-        payments: []
+        payments: [],
+        measurementTemplates: [],
+        measurementFields: []
     }
 };
 
@@ -21,6 +23,20 @@ const entityMeta = {
     inventory: { table: "tf_inventory", plural: "inventory", title: "Inventory item", section: "inventory" },
     payment: { table: "tf_payments", plural: "payments", title: "Payment", section: "payments" }
 };
+
+const fallbackMeasurementTemplates = [
+    { id: "frock", name: "Frock", fields: ["Shoulder", "Bust", "Waist", "Hip", "Sleeve", "Armhole", "Full Length", "Frock Torso Height"] },
+    { id: "blouse", name: "Blouse", fields: ["Shoulder", "Bust", "Waist", "Armhole", "Sleeve", "Sleeve Round", "Blouse Length", "Front Neck Depth", "Back Neck Depth"] },
+    { id: "shirt", name: "Shirt", fields: ["Neck", "Shoulder", "Chest", "Waist", "Hip", "Sleeve", "Armhole", "Shirt Length"] },
+    { id: "wedding-saree-jacket", name: "Wedding Saree Jacket", fields: ["Shoulder", "Bust", "Under Bust", "Waist", "Armhole", "Sleeve", "Jacket Length", "Front Neck Depth", "Back Neck Depth"] },
+    { id: "wedding-frock", name: "Wedding frock", fields: ["Shoulder", "Bust", "Waist", "Hip", "Armhole", "Sleeve", "Torso Height", "Full Length"] },
+    { id: "crop-top", name: "Crop top", fields: ["Shoulder", "Bust", "Waist", "Armhole", "Sleeve", "Top Length", "Front Neck Depth", "Back Neck Depth"] },
+    { id: "lehenga", name: "Lehenga", fields: ["Waist", "Hip", "Waist to Hip", "Full Length", "Hem Round"] },
+    { id: "shorts", name: "Shorts", fields: ["Waist", "Hip", "Rise", "Thigh", "Length", "Leg Opening"] },
+    { id: "sarong", name: "Sarong", fields: ["Waist", "Hip", "Full Length"] },
+    { id: "school-frock", name: "School Frock", fields: ["Shoulder", "Bust", "Waist", "Hip", "Sleeve", "Armhole", "Torso Height", "Full Length"] },
+    { id: "trouser", name: "Trouser", fields: ["Waist", "Hip", "Rise", "Thigh", "Knee", "Inseam", "Outseam", "Bottom"] }
+];
 
 const currencyFormatter = new Intl.NumberFormat("en-LK", {
     style: "currency",
@@ -135,6 +151,39 @@ async function fetchTable(table, select = "*") {
     return data || [];
 }
 
+function useFallbackMeasurementConfiguration() {
+    appState.data.measurementTemplates = fallbackMeasurementTemplates.map(({ id, name }) => ({ id, name }));
+    appState.data.measurementFields = fallbackMeasurementTemplates.flatMap((template) => template.fields.map((name, index) => ({
+        id: `${template.id}-${index + 1}`,
+        template_id: template.id,
+        name,
+        unit: "inches",
+        display_order: index + 1
+    })));
+}
+
+async function loadMeasurementConfiguration() {
+    const [templatesResult, fieldsResult] = await Promise.allSettled([
+        withTimeout(supabaseClient.from("measurement_templates").select("id, name, description").order("id")),
+        withTimeout(supabaseClient.from("measurement_fields").select("id, template_id, name, unit, display_order").order("display_order"))
+    ]);
+
+    const templates = templatesResult.status === "fulfilled" && !templatesResult.value.error
+        ? templatesResult.value.data || []
+        : [];
+    const fields = fieldsResult.status === "fulfilled" && !fieldsResult.value.error
+        ? fieldsResult.value.data || []
+        : [];
+
+    if (templates.length && fields.length) {
+        appState.data.measurementTemplates = templates;
+        appState.data.measurementFields = fields;
+    } else {
+        useFallbackMeasurementConfiguration();
+        console.warn("Using built-in garment measurements because the existing template tables were unavailable.");
+    }
+}
+
 async function loadAllData() {
     clearError();
 
@@ -163,6 +212,7 @@ async function loadAllData() {
         showError(`Database setup is required for: ${failures.join(", ")}. Run supabase/schema.sql in the Supabase SQL Editor.`);
     }
 
+    await loadMeasurementConfiguration();
     renderAll();
 }
 
@@ -283,10 +333,16 @@ function renderMeasurements() {
     ));
 
     document.getElementById("measurementsGrid").innerHTML = measurements.map((item) => {
-        const values = [
-            ["Chest", item.chest], ["Waist", item.waist], ["Hips", item.hips], ["Shoulder", item.shoulder],
-            ["Sleeve", item.sleeve_length], ["Length", item.garment_length], ["Neck", item.neck], ["Inseam", item.inseam]
-        ].filter(([, value]) => value !== null && value !== "" && value !== undefined);
+        const dynamicValues = Object.entries(item.extra_values || {}).map(([label, stored]) => {
+            const isObjectValue = stored && typeof stored === "object";
+            return [label, isObjectValue ? stored.value : stored, isObjectValue ? stored.unit : "inches"];
+        });
+        const legacyValues = [
+            ["Chest", item.chest, "inches"], ["Waist", item.waist, "inches"], ["Hips", item.hips, "inches"], ["Shoulder", item.shoulder, "inches"],
+            ["Sleeve", item.sleeve_length, "inches"], ["Length", item.garment_length, "inches"], ["Neck", item.neck, "inches"], ["Inseam", item.inseam, "inches"]
+        ];
+        const values = (dynamicValues.length ? dynamicValues : legacyValues)
+            .filter(([, value]) => value !== null && value !== "" && value !== undefined);
 
         return `
             <article class="measurement-card">
@@ -295,7 +351,7 @@ function renderMeasurements() {
                     ${rowActions("measurement", item.id)}
                 </div>
                 <div class="measurement-values">
-                    ${values.map(([label, value]) => `<div><span>${label}</span><strong>${escapeHtml(value)} in</strong></div>`).join("")}
+                    ${values.map(([label, value, unit]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)} ${escapeHtml(unit === "inches" ? "in" : unit)}</strong></div>`).join("")}
                 </div>
                 ${item.notes ? `<p class="measurement-note">${escapeHtml(item.notes)}</p>` : ""}
             </article>`;
@@ -378,6 +434,68 @@ function fieldInput({ name, label, type = "text", value = "", required = false, 
     return `<div class="${col}"><label class="form-label" for="field-${name}">${escapeHtml(label)}</label>${control}</div>`;
 }
 
+function measurementFieldsForProfile(profileName) {
+    if (!profileName) return [];
+    const template = appState.data.measurementTemplates.find((item) => item.name === profileName)
+        || appState.data.measurementTemplates[0];
+    if (!template) return [];
+
+    return appState.data.measurementFields
+        .filter((field) => String(field.template_id) === String(template.id))
+        .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
+}
+
+function measurementInputName(field) {
+    return `measurement__${String(field.id).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function renderDynamicMeasurementInputs(profileName, savedValues = {}) {
+    const fields = measurementFieldsForProfile(profileName);
+
+    if (!fields.length) {
+        return `<div class="col-12"><div class="measurement-form-empty">No measurement fields are configured for this garment.</div></div>`;
+    }
+
+    return fields.map((field) => {
+        const stored = savedValues?.[field.name];
+        const value = stored && typeof stored === "object" ? stored.value : stored ?? "";
+        const unit = field.unit || "inches";
+        const name = measurementInputName(field);
+        return `
+            <div class="col-6">
+                <label class="form-label" for="field-${name}">${escapeHtml(field.name)} <span class="field-unit">(${escapeHtml(unit)})</span></label>
+                <input
+                    class="form-control dynamic-measurement-input"
+                    id="field-${name}"
+                    name="${name}"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value="${escapeHtml(value)}"
+                    data-measurement-label="${escapeHtml(field.name)}"
+                    data-measurement-unit="${escapeHtml(unit)}"
+                    inputmode="decimal"
+                >
+            </div>`;
+    }).join("");
+}
+
+function measurementForm(customerOptions, record) {
+    const selectedProfile = record.profile_name || appState.data.measurementTemplates[0]?.name || "";
+    const garmentOptions = `<option value="">Select garment</option>${appState.data.measurementTemplates.map((template) => `
+        <option value="${escapeHtml(template.name)}"${template.name === selectedProfile ? " selected" : ""}>${escapeHtml(template.name)}</option>
+    `).join("")}`;
+
+    return `
+        <div class="row g-3">
+            ${fieldInput({ name: "customer_id", label: "Customer", type: "select", options: customerOptions, required: true })}
+            ${fieldInput({ name: "profile_name", label: "Garment", type: "select", options: garmentOptions, required: true })}
+            <div class="col-12"><div class="measurement-divider"><span>Required measurements</span></div></div>
+            <div class="col-12"><div class="row g-3" id="dynamicMeasurementFields">${renderDynamicMeasurementInputs(selectedProfile, record.extra_values || {})}</div></div>
+            ${fieldInput({ name: "notes", label: "Additional notes", type: "textarea", value: record.notes })}
+        </div>`;
+}
+
 function getFormFields(entity, record = {}) {
     const customerOptions = `<option value="">Select customer</option>${selectOptions(appState.data.customers, "id", (item) => `${item.full_name} · ${item.phone}`, record.customer_id)}`;
     const orderOptions = `<option value="">No linked order</option>${selectOptions(appState.data.orders, "id", (item) => `${item.order_number} · ${relatedName(item, "customers", "customer_id")}`, record.order_id)}`;
@@ -408,17 +526,7 @@ function getFormFields(entity, record = {}) {
         ];
     }
 
-    if (entity === "measurement") {
-        fields = [
-            { name: "customer_id", label: "Customer", type: "select", options: customerOptions, required: true },
-            { name: "profile_name", label: "Profile / garment", value: record.profile_name, placeholder: "e.g. Blouse", required: true },
-            ...[
-                ["chest", "Chest"], ["waist", "Waist"], ["hips", "Hips"], ["shoulder", "Shoulder"],
-                ["sleeve_length", "Sleeve length"], ["garment_length", "Garment length"], ["neck", "Neck"], ["inseam", "Inseam"]
-            ].map(([name, label]) => ({ name, label: `${label} (inches)`, type: "number", value: record[name] ?? "", min: 0, step: 0.01, col: "col-6" })),
-            { name: "notes", label: "Additional notes", type: "textarea", value: record.notes }
-        ];
-    }
+    if (entity === "measurement") return measurementForm(customerOptions, record);
 
     if (entity === "inventory") {
         fields = [
@@ -469,10 +577,23 @@ function formPayload(form, entity) {
     const payload = Object.fromEntries(new FormData(form).entries());
     const numericFields = {
         order: ["total_amount", "advance_amount"],
-        measurement: ["chest", "waist", "hips", "shoulder", "sleeve_length", "garment_length", "neck", "inseam"],
+        measurement: [],
         inventory: ["quantity", "reorder_level", "unit_cost"],
         payment: ["amount"]
     }[entity] || [];
+
+    if (entity === "measurement") {
+        const extraValues = {};
+        form.querySelectorAll(".dynamic-measurement-input").forEach((input) => {
+            delete payload[input.name];
+            if (input.value === "") return;
+            extraValues[input.dataset.measurementLabel] = {
+                value: Number(input.value),
+                unit: input.dataset.measurementUnit || "inches"
+            };
+        });
+        payload.extra_values = extraValues;
+    }
 
     numericFields.forEach((field) => {
         payload[field] = payload[field] === "" ? null : Number(payload[field]);
@@ -580,6 +701,12 @@ function bindEvents() {
         if (openButton) openEntityModal(openButton.dataset.openEntity);
         if (rowButton?.dataset.action === "edit") openEntityModal(rowButton.dataset.entity, rowButton.dataset.id);
         if (rowButton?.dataset.action === "delete") deleteEntity(rowButton.dataset.entity, rowButton.dataset.id);
+    });
+
+    document.addEventListener("change", (event) => {
+        if (event.target.id !== "field-profile_name" || appState.editingEntity !== "measurement") return;
+        const container = document.getElementById("dynamicMeasurementFields");
+        if (container) container.innerHTML = renderDynamicMeasurementInputs(event.target.value);
     });
 
     document.getElementById("primaryAction").addEventListener("click", (event) => openEntityModal(event.currentTarget.dataset.entity));
