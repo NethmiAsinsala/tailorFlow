@@ -332,6 +332,21 @@ function orderPayments(orderId) {
         .reduce((total, payment) => total + Number(payment.amount || 0), 0);
 }
 
+function legacyAdvanceForOrder(order) {
+    const hasRecordedAdvance = appState.data.payments.some((payment) => {
+        return payment.order_id === order.id && payment.payment_type === "advance";
+    });
+    return hasRecordedAdvance ? 0 : Number(order.advance_amount || 0);
+}
+
+function orderPaidAmount(order) {
+    return legacyAdvanceForOrder(order) + orderPayments(order.id);
+}
+
+function orderBalance(order) {
+    return Math.max(0, Number(order.total_amount || 0) - orderPaidAmount(order));
+}
+
 function renderOrders() {
     const orders = appState.data.orders.filter((order) => {
         const customerName = relatedName(order, "customers", "customer_id");
@@ -340,8 +355,7 @@ function renderOrders() {
     });
 
     document.getElementById("ordersBody").innerHTML = orders.map((order) => {
-        const paid = Number(order.advance_amount || 0) + orderPayments(order.id);
-        const balance = Math.max(0, Number(order.total_amount || 0) - paid);
+        const balance = orderBalance(order);
         return `
             <tr>
                 <td><strong>${escapeHtml(order.order_number)}</strong><small>${formatDate(order.order_date)}</small></td>
@@ -350,10 +364,21 @@ function renderOrders() {
                 <td>${formatDate(order.due_date)}</td>
                 <td>${statusBadge(order.status)}</td>
                 <td><strong>${formatCurrency(balance)}</strong></td>
-                <td>${rowActions("order", order.id)}</td>
+                <td>${orderActions(order, balance)}</td>
             </tr>`;
     }).join("");
     document.getElementById("ordersEmpty").classList.toggle("d-none", orders.length > 0);
+}
+
+function orderActions(order, balance) {
+    const confirmButton = balance > 0 && order.status !== "cancelled"
+        ? `<button type="button" class="confirm" data-action="confirm-payment" data-id="${order.id}">Confirm payment</button>`
+        : `<span class="paid-label">Paid</span>`;
+
+    return `<div class="row-actions">${confirmButton}
+        <button type="button" data-action="edit" data-entity="order" data-id="${order.id}" aria-label="Edit order">Edit</button>
+        <button type="button" class="danger" data-action="delete" data-entity="order" data-id="${order.id}" aria-label="Delete order">Delete</button>
+    </div>`;
 }
 
 function renderCustomers() {
@@ -435,14 +460,14 @@ function renderPayments() {
     }));
 
     const orderAdvances = appState.data.orders
-        .filter((order) => Number(order.advance_amount || 0) > 0)
+        .filter((order) => legacyAdvanceForOrder(order) > 0)
         .map((order) => ({
             id: `order-advance-${order.id}`,
             customer_id: order.customer_id,
             customers: order.customers,
             order_id: order.id,
             orders: { order_number: order.order_number },
-            amount: Number(order.advance_amount),
+            amount: legacyAdvanceForOrder(order),
             paid_at: order.order_date,
             method: "order advance",
             payment_type: "advance",
@@ -575,6 +600,63 @@ function measurementForm(customerOptions, record) {
         </div>`;
 }
 
+function orderForm(record, today) {
+    const customerOptions = `<option value="">Select customer</option><option value="__new__">＋ Add a new customer</option>${selectOptions(appState.data.customers, "id", (item) => `${item.full_name} · ${item.phone}`, record.customer_id)}`;
+    const statusOptions = ["pending", "in_progress", "ready", "completed", "cancelled"]
+        .map((status) => `<option value="${status}"${(record.status || "pending") === status ? " selected" : ""}>${titleCase(status)}</option>`).join("");
+    const methodOptions = ["cash", "card", "bank_transfer", "online", "other"]
+        .map((method) => `<option value="${method}"${(record.advance_method || "cash") === method ? " selected" : ""}>${titleCase(method)}</option>`).join("");
+
+    return `
+        <div class="row g-3">
+            ${fieldInput({ name: "customer_id", label: "Customer", type: "select", options: customerOptions, required: true })}
+            <div class="col-12 d-none" id="newCustomerFields">
+                <div class="new-customer-panel">
+                    <div class="d-flex justify-content-between align-items-center gap-2 mb-2"><strong>New customer details</strong><small>Saved automatically with this order</small></div>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label" for="field-new_customer_full_name">Customer name</label><input class="form-control" id="field-new_customer_full_name" name="new_customer_full_name" type="text" placeholder="Full name"></div>
+                        <div class="col-md-6"><label class="form-label" for="field-new_customer_phone">Phone number</label><input class="form-control" id="field-new_customer_phone" name="new_customer_phone" type="tel" placeholder="077 123 4567"></div>
+                        <div class="col-md-6"><label class="form-label" for="field-new_customer_whatsapp">WhatsApp number</label><input class="form-control" id="field-new_customer_whatsapp" name="new_customer_whatsapp" type="tel" placeholder="Optional"></div>
+                        <div class="col-md-6"><label class="form-label" for="field-new_customer_email">Email</label><input class="form-control" id="field-new_customer_email" name="new_customer_email" type="email" placeholder="Optional"></div>
+                    </div>
+                </div>
+            </div>
+            ${fieldInput({ name: "garment_type", label: "Garment / service", value: record.garment_type, placeholder: "e.g. Saree jacket", required: true, col: "col-md-6" })}
+            ${fieldInput({ name: "status", label: "Status", type: "select", options: statusOptions, col: "col-md-6" })}
+            ${fieldInput({ name: "order_date", label: "Order date", type: "date", value: dateInputValue(record.order_date) || today, required: true, col: "col-md-6" })}
+            ${fieldInput({ name: "due_date", label: "Due date", type: "date", value: dateInputValue(record.due_date), required: true, col: "col-md-6" })}
+            ${fieldInput({ name: "total_amount", label: "Total amount (LKR)", type: "number", value: record.total_amount ?? "", min: 0, step: 0.01, required: true, col: "col-md-6" })}
+            ${fieldInput({ name: "advance_amount", label: "Advance received (LKR)", type: "number", value: record.advance_amount ?? 0, min: 0, step: 0.01, col: "col-md-6" })}
+            ${fieldInput({ name: "advance_method", label: "Advance payment method", type: "select", options: methodOptions, col: "col-md-6" })}
+            ${fieldInput({ name: "notes", label: "Order notes", type: "textarea", value: record.notes, placeholder: "Design details, fabric, colour and special requests" })}
+        </div>`;
+}
+
+function paymentConfirmationForm(order) {
+    const balance = orderBalance(order);
+    const type = orderPaidAmount(order) > 0 ? "balance" : "full";
+    const methodOptions = ["cash", "card", "bank_transfer", "online", "other"]
+        .map((method) => `<option value="${method}">${titleCase(method)}</option>`).join("");
+    const today = new Date().toISOString().slice(0, 10);
+
+    return `
+        <input type="hidden" name="customer_id" value="${escapeHtml(order.customer_id)}">
+        <input type="hidden" name="order_id" value="${escapeHtml(order.id)}">
+        <input type="hidden" name="payment_type" value="${type}">
+        <input type="hidden" name="amount" value="${balance}">
+        <div class="payment-confirmation">
+            <p class="eyebrow">Confirm customer payment</p>
+            <h3>${escapeHtml(relatedName(order, "customers", "customer_id"))}</h3>
+            <p>Order <strong>${escapeHtml(order.order_number)}</strong> · ${escapeHtml(order.garment_type)}</p>
+            <div class="payment-confirmation-total"><span>${paymentTypeLabel(type)}</span><strong>${formatCurrency(balance)}</strong></div>
+        </div>
+        <div class="row g-3 mt-1">
+            ${fieldInput({ name: "paid_at", label: "Payment date", type: "date", value: today, required: true, col: "col-md-6" })}
+            ${fieldInput({ name: "method", label: "Payment method", type: "select", options: methodOptions, required: true, col: "col-md-6" })}
+            ${fieldInput({ name: "notes", label: "Notes", type: "textarea", value: "Balance confirmed from Orders", rows: 2 })}
+        </div>`;
+}
+
 function getFormFields(entity, record = {}) {
     const customerOptions = `<option value="">Select customer</option>${selectOptions(appState.data.customers, "id", (item) => `${item.full_name} · ${item.phone}`, record.customer_id)}`;
     const orderOptions = `<option value="">No linked order</option>${selectOptions(appState.data.orders, "id", (item) => `${item.order_number} · ${relatedName(item, "customers", "customer_id")}`, record.order_id)}`;
@@ -592,18 +674,7 @@ function getFormFields(entity, record = {}) {
         ];
     }
 
-    if (entity === "order") {
-        fields = [
-            { name: "customer_id", label: "Customer", type: "select", options: customerOptions, required: true },
-            { name: "garment_type", label: "Garment / service", value: record.garment_type, placeholder: "e.g. Saree jacket", required: true, col: "col-md-6" },
-            { name: "status", label: "Status", type: "select", options: ["pending", "in_progress", "ready", "completed", "cancelled"].map((status) => `<option value="${status}"${record.status === status ? " selected" : ""}>${titleCase(status)}</option>`).join(""), col: "col-md-6" },
-            { name: "order_date", label: "Order date", type: "date", value: dateInputValue(record.order_date) || today, required: true, col: "col-md-6" },
-            { name: "due_date", label: "Due date", type: "date", value: dateInputValue(record.due_date), required: true, col: "col-md-6" },
-            { name: "total_amount", label: "Total amount (LKR)", type: "number", value: record.total_amount ?? "", min: 0, step: 0.01, required: true, col: "col-md-6" },
-            { name: "advance_amount", label: "Advance paid (LKR)", type: "number", value: record.advance_amount ?? 0, min: 0, step: 0.01, col: "col-md-6" },
-            { name: "notes", label: "Order notes", type: "textarea", value: record.notes, placeholder: "Design details, fabric, colour and special requests" }
-        ];
-    }
+    if (entity === "order") return orderForm(record, today);
 
     if (entity === "measurement") return measurementForm(customerOptions, record);
 
@@ -648,14 +719,49 @@ function openEntityModal(entity, id = null) {
     appState.editingEntity = entity;
     appState.editingId = id;
     clearFormError();
+    document.getElementById("entityModalEyebrow").textContent = "Thanu Fashion";
     document.getElementById("entityModalTitle").textContent = `${id ? "Edit" : "Add"} ${meta.title.toLowerCase()}`;
     document.getElementById("entityFormFields").innerHTML = getFormFields(entity, record || {});
     document.getElementById("saveEntityButton").textContent = id ? "Save changes" : `Add ${meta.title.toLowerCase()}`;
     entityModal.show();
+    if (entity === "order") toggleNewCustomerFields();
 
     window.setTimeout(() => {
         document.querySelector("#entityFormFields input, #entityFormFields select, #entityFormFields textarea")?.focus();
     }, 180);
+}
+
+function openPaymentConfirmation(orderId) {
+    const order = orderById(orderId);
+    if (!order) return;
+
+    const balance = orderBalance(order);
+    if (balance <= 0) {
+        showToast("This order is already fully paid.");
+        return;
+    }
+
+    appState.editingEntity = "payment";
+    appState.editingId = null;
+    clearFormError();
+    document.getElementById("entityModalEyebrow").textContent = "Payments update automatically";
+    document.getElementById("entityModalTitle").textContent = "Confirm payment received";
+    document.getElementById("entityFormFields").innerHTML = paymentConfirmationForm(order);
+    document.getElementById("saveEntityButton").textContent = `Confirm ${formatCurrency(balance)} received`;
+    entityModal.show();
+}
+
+function toggleNewCustomerFields() {
+    const select = document.getElementById("field-customer_id");
+    const container = document.getElementById("newCustomerFields");
+    if (!select || !container) return;
+
+    const isNewCustomer = select.value === "__new__";
+    container.classList.toggle("d-none", !isNewCustomer);
+    ["new_customer_full_name", "new_customer_phone"].forEach((name) => {
+        const input = document.querySelector(`[name="${name}"]`);
+        if (input) input.required = isNewCustomer;
+    });
 }
 
 function formPayload(form, entity) {
@@ -678,6 +784,28 @@ function formPayload(form, entity) {
             };
         });
         payload.extra_values = extraValues;
+    }
+
+    if (entity === "order") {
+        const isNewCustomer = payload.customer_id === "__new__";
+        const advanceMethod = payload.advance_method || "cash";
+        delete payload.advance_method;
+
+        if (isNewCustomer) {
+            payload._newCustomer = {
+                full_name: payload.new_customer_full_name,
+                phone: payload.new_customer_phone,
+                whatsapp: payload.new_customer_whatsapp || null,
+                email: payload.new_customer_email || null
+            };
+            payload.customer_id = null;
+        }
+
+        delete payload.new_customer_full_name;
+        delete payload.new_customer_phone;
+        delete payload.new_customer_whatsapp;
+        delete payload.new_customer_email;
+        payload._advanceMethod = advanceMethod;
     }
 
     numericFields.forEach((field) => {
@@ -715,13 +843,48 @@ async function saveEntity(event) {
     button.textContent = "Saving…";
 
     try {
+        let initialAdvance = 0;
+        let advanceMethod = "cash";
+
+        if (entity === "order") {
+            const newCustomer = payload._newCustomer;
+            delete payload._newCustomer;
+            advanceMethod = payload._advanceMethod || "cash";
+            delete payload._advanceMethod;
+            initialAdvance = appState.editingId ? 0 : Number(payload.advance_amount || 0);
+
+            if (newCustomer) {
+                const { data: customer, error: customerError } = await withTimeout(
+                    supabaseClient.from("tf_customers").insert({ ...newCustomer, user_id: appState.session.user.id }).select().single()
+                );
+                if (customerError) throw customerError;
+                payload.customer_id = customer.id;
+            }
+        }
+
         let request = supabaseClient.from(meta.table);
         request = appState.editingId
             ? request.update(payload).eq("id", appState.editingId)
-            : request.insert(payload);
+            : entity === "order"
+                ? request.insert(payload).select().single()
+                : request.insert(payload);
 
-        const { error } = await withTimeout(request);
+        const { data: savedRecord, error } = await withTimeout(request);
         if (error) throw error;
+
+        if (entity === "order" && initialAdvance > 0) {
+            const { error: advanceError } = await withTimeout(supabaseClient.from("tf_payments").insert({
+                user_id: appState.session.user.id,
+                customer_id: savedRecord.customer_id,
+                order_id: savedRecord.id,
+                amount: initialAdvance,
+                payment_type: "advance",
+                method: advanceMethod,
+                paid_at: savedRecord.order_date,
+                notes: "Initial advance recorded with order."
+            }));
+            if (advanceError) throw new Error(`Order saved, but the advance could not be recorded: ${advanceError.message}`);
+        }
 
         const failures = await loadAllData();
         entityModal.hide();
