@@ -77,12 +77,17 @@ create table if not exists public.tf_payments (
     customer_id uuid not null references public.tf_customers(id) on delete cascade,
     order_id uuid references public.tf_orders(id) on delete set null,
     amount numeric(12,2) not null check (amount > 0),
+    payment_type text not null default 'full' check (payment_type in ('advance', 'full', 'balance')),
     method text not null default 'cash' check (method in ('cash', 'card', 'bank_transfer', 'online', 'other')),
     paid_at date not null default current_date,
     notes text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+-- Upgrade tf_payments when this schema is rerun after an earlier version.
+alter table public.tf_payments
+add column if not exists payment_type text not null default 'full';
 
 create index if not exists tf_customers_user_id_idx on public.tf_customers(user_id);
 create index if not exists tf_orders_user_id_idx on public.tf_orders(user_id);

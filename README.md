@@ -27,6 +27,10 @@ For an installation created before dynamic garment measurements were added,
 run [`supabase/add-dynamic-measurements.sql`](supabase/add-dynamic-measurements.sql)
 once in the Supabase SQL Editor.
 
+For payment summaries split by advance, full, and balance payments, run
+[`supabase/add-payment-types.sql`](supabase/add-payment-types.sql) once in the
+Supabase SQL Editor.
+
 ## Run locally
 
 Use the VS Code Live Server extension, or run:

@@ -908,7 +908,32 @@ textarea.form-control {
     font-size: 1.7rem;
 }
 
+.summary-card small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--muted);
+    font-size: 0.74rem;
+}
+
+.summary-card.advance { border-left-color: #d98f20; }
+.summary-card.full { border-left-color: var(--success); }
+.summary-card.balance { border-left-color: #25759c; }
+
+.payment-type-badge {
+    display: inline-flex;
+    padding: 0.3rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.payment-type-badge.advance { color: #985a05; background: #fff2d6; }
+.payment-type-badge.full { color: #14734b; background: #e2f6eb; }
+.payment-type-badge.balance { color: #1d6487; background: #e2f3fb; }
+
 .app-modal {
+    height: min(860px, calc(100vh - 1rem));
     max-height: calc(100vh - 1rem);
     overflow: hidden;
     border: 0;
@@ -931,15 +956,23 @@ textarea.form-control {
     padding: 1.25rem 1.4rem;
 }
 
+.app-modal #entityForm {
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
 .app-modal .modal-body {
+    min-height: 0;
+    flex: 1 1 auto;
     overflow-y: auto;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .app-modal .modal-footer {
-    position: sticky;
-    z-index: 2;
-    bottom: 0;
+    flex: 0 0 auto;
     border-top-color: var(--border);
     background: #fff;
     box-shadow: 0 -0.6rem 1.5rem rgba(43, 0, 31, 0.05);
@@ -976,6 +1009,20 @@ textarea.form-control {
     border-radius: 0.75rem;
     background: #fffbf6;
     text-align: center;
+}
+
+#entityFormError {
+    margin-bottom: 1rem;
+    font-size: 0.88rem;
+}
+
+#refreshButton.is-refreshing {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+#refreshButton.is-refreshing::first-letter {
+    display: inline-block;
 }
 
 .app-toast {
@@ -1070,6 +1117,22 @@ textarea.form-control {
     .topbar-actions .btn {
         padding: 0.55rem 0.65rem;
         font-size: 0.74rem;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+
+    .app-modal {
+        height: calc(100vh - 1rem);
+        border-radius: 1rem;
+    }
+
+    .app-modal .modal-header,
+    .app-modal .modal-body,
+    .app-modal .modal-footer {
+        padding-right: 1rem;
+        padding-left: 1rem;
     }
 
     .hero-panel {

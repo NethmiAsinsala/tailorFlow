@@ -88,6 +88,19 @@ function statusBadge(status) {
     return `<span class="status-badge status-${escapeHtml(status)}">${escapeHtml(titleCase(status))}</span>`;
 }
 
+function paymentTypeLabel(type) {
+    return {
+        advance: "Advance",
+        full: "Full payment",
+        balance: "Balance payment"
+    }[type] || "Payment";
+}
+
+function paymentTypeBadge(type) {
+    const safeType = ["advance", "full", "balance"].includes(type) ? type : "balance";
+    return `<span class="payment-type-badge ${safeType}">${paymentTypeLabel(safeType)}</span>`;
+}
+
 function showToast(message) {
     document.getElementById("toastMessage").textContent = message;
     appToast.show();
@@ -97,6 +110,18 @@ function showError(message) {
     appMessage.textContent = message;
     appMessage.classList.remove("d-none");
     window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function showFormError(message) {
+    const errorBox = document.getElementById("entityFormError");
+    errorBox.textContent = message;
+    errorBox.classList.remove("d-none");
+}
+
+function clearFormError() {
+    const errorBox = document.getElementById("entityFormError");
+    errorBox.textContent = "";
+    errorBox.classList.add("d-none");
 }
 
 function clearError() {
@@ -214,6 +239,32 @@ async function loadAllData() {
 
     await loadMeasurementConfiguration();
     renderAll();
+    return failures;
+}
+
+async function refreshData(button = null) {
+    const originalLabel = button?.innerHTML;
+    if (button) {
+        button.classList.add("is-refreshing");
+        button.innerHTML = "↻ <span class=\"d-none d-sm-inline\">Refreshing…</span>";
+    }
+
+    try {
+        const failures = await loadAllData();
+        if (failures.length) {
+            showError("Some data could not be refreshed. Check your Supabase setup and try again.");
+        } else {
+            showToast("Data refreshed.");
+        }
+    } catch (error) {
+        console.error("Refresh failed:", error);
+        showError("Could not refresh your data. Please check your connection and try again.");
+    } finally {
+        if (button) {
+            button.classList.remove("is-refreshing");
+            button.innerHTML = originalLabel;
+        }
+    }
 }
 
 function renderAll() {
@@ -377,8 +428,31 @@ function renderInventory() {
 }
 
 function renderPayments() {
-    const payments = appState.data.payments.filter((payment) => matchesSearch(
-        relatedName(payment, "customers", "customer_id"), payment.orders?.order_number, payment.method, payment.amount
+    const recordedPayments = appState.data.payments.map((payment) => ({
+        ...payment,
+        payment_type: payment.payment_type || "full",
+        isLegacyAdvance: false
+    }));
+
+    const orderAdvances = appState.data.orders
+        .filter((order) => Number(order.advance_amount || 0) > 0)
+        .map((order) => ({
+            id: `order-advance-${order.id}`,
+            customer_id: order.customer_id,
+            customers: order.customers,
+            order_id: order.id,
+            orders: { order_number: order.order_number },
+            amount: Number(order.advance_amount),
+            paid_at: order.order_date,
+            method: "order advance",
+            payment_type: "advance",
+            isLegacyAdvance: true
+        }));
+
+    const activities = [...recordedPayments, ...orderAdvances]
+        .sort((a, b) => new Date(b.paid_at || 0) - new Date(a.paid_at || 0));
+    const payments = activities.filter((payment) => matchesSearch(
+        relatedName(payment, "customers", "customer_id"), payment.orders?.order_number, payment.method, payment.payment_type, payment.amount
     ));
 
     document.getElementById("paymentsBody").innerHTML = payments.map((payment) => `
@@ -386,19 +460,24 @@ function renderPayments() {
             <td>${formatDate(payment.paid_at)}</td>
             <td><strong>${escapeHtml(relatedName(payment, "customers", "customer_id"))}</strong></td>
             <td>${escapeHtml(payment.orders?.order_number || orderById(payment.order_id)?.order_number || "—")}</td>
-            <td>${escapeHtml(titleCase(payment.method))}</td>
+            <td>${paymentTypeBadge(payment.payment_type)}</td>
+            <td>${escapeHtml(payment.isLegacyAdvance ? "Order advance" : titleCase(payment.method))}</td>
             <td><strong>${formatCurrency(payment.amount)}</strong></td>
-            <td>${rowActions("payment", payment.id)}</td>
+            <td>${payment.isLegacyAdvance ? `<small class="text-muted">Edit order</small>` : rowActions("payment", payment.id)}</td>
         </tr>
     `).join("");
 
-    const total = appState.data.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    const monthKey = new Date().toISOString().slice(0, 7);
-    const monthTotal = appState.data.payments
-        .filter((payment) => String(payment.paid_at).startsWith(monthKey))
-        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const total = activities.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const advancePayments = activities.filter((payment) => payment.payment_type === "advance");
+    const fullPayments = activities.filter((payment) => payment.payment_type === "full");
+    const balancePayments = activities.filter((payment) => payment.payment_type === "balance");
     document.getElementById("paymentTotal").textContent = formatCurrency(total);
-    document.getElementById("paymentMonth").textContent = formatCurrency(monthTotal);
+    document.getElementById("paymentAdvance").textContent = formatCurrency(advancePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
+    document.getElementById("paymentFull").textContent = formatCurrency(fullPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
+    document.getElementById("paymentBalance").textContent = formatCurrency(balancePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
+    document.getElementById("paymentAdvanceCount").textContent = `${advancePayments.length} advance ${advancePayments.length === 1 ? "payment" : "payments"}`;
+    document.getElementById("paymentFullCount").textContent = `${fullPayments.length} full ${fullPayments.length === 1 ? "payment" : "payments"}`;
+    document.getElementById("paymentBalanceCount").textContent = `${balancePayments.length} balance ${balancePayments.length === 1 ? "payment" : "payments"}`;
     document.getElementById("paymentsEmpty").classList.toggle("d-none", payments.length > 0);
 }
 
@@ -544,6 +623,7 @@ function getFormFields(entity, record = {}) {
         fields = [
             { name: "customer_id", label: "Customer", type: "select", options: customerOptions, required: true },
             { name: "order_id", label: "Linked order", type: "select", options: orderOptions },
+            { name: "payment_type", label: "Payment type", type: "select", options: ["advance", "full", "balance"].map((type) => `<option value="${type}"${(record.payment_type || "balance") === type ? " selected" : ""}>${paymentTypeLabel(type)}</option>`).join(""), required: true },
             { name: "amount", label: "Amount (LKR)", type: "number", value: record.amount ?? "", min: 0.01, step: 0.01, required: true, col: "col-md-6" },
             { name: "paid_at", label: "Payment date", type: "date", value: dateInputValue(record.paid_at) || today, required: true, col: "col-md-6" },
             { name: "method", label: "Payment method", type: "select", options: ["cash", "card", "bank_transfer", "online", "other"].map((method) => `<option value="${method}"${record.method === method ? " selected" : ""}>${titleCase(method)}</option>`).join(""), required: true },
@@ -567,10 +647,15 @@ function openEntityModal(entity, id = null) {
     const record = id ? appState.data[meta.plural].find((item) => item.id === id) : {};
     appState.editingEntity = entity;
     appState.editingId = id;
+    clearFormError();
     document.getElementById("entityModalTitle").textContent = `${id ? "Edit" : "Add"} ${meta.title.toLowerCase()}`;
     document.getElementById("entityFormFields").innerHTML = getFormFields(entity, record || {});
     document.getElementById("saveEntityButton").textContent = id ? "Save changes" : `Add ${meta.title.toLowerCase()}`;
     entityModal.show();
+
+    window.setTimeout(() => {
+        document.querySelector("#entityFormFields input, #entityFormFields select, #entityFormFields textarea")?.focus();
+    }, 180);
 }
 
 function formPayload(form, entity) {
@@ -619,46 +704,60 @@ function formPayload(form, entity) {
 async function saveEntity(event) {
     event.preventDefault();
     clearError();
+    clearFormError();
     const entity = appState.editingEntity;
     const meta = entityMeta[entity];
     const button = document.getElementById("saveEntityButton");
+    const originalLabel = button.textContent;
     const payload = formPayload(event.currentTarget, entity);
 
     button.disabled = true;
     button.textContent = "Saving…";
 
-    let request = supabaseClient.from(meta.table);
-    request = appState.editingId
-        ? request.update(payload).eq("id", appState.editingId)
-        : request.insert(payload);
+    try {
+        let request = supabaseClient.from(meta.table);
+        request = appState.editingId
+            ? request.update(payload).eq("id", appState.editingId)
+            : request.insert(payload);
 
-    const { error } = await request;
-    button.disabled = false;
+        const { error } = await withTimeout(request);
+        if (error) throw error;
 
-    if (error) {
-        button.textContent = "Try again";
-        showError(error.message);
-        return;
+        const failures = await loadAllData();
+        entityModal.hide();
+        showToast(`${meta.title} ${appState.editingId ? "updated" : "added"} successfully.`);
+        navigateTo(meta.section);
+
+        if (failures.length) {
+            showError("Your record was saved, but the latest data could not be reloaded. Tap Refresh to try again.");
+        }
+    } catch (error) {
+        console.error(`Could not save ${entity}:`, error);
+        const message = error?.message || "Could not save this record. Please try again.";
+        showFormError(message.includes("extra_values")
+            ? "Database update needed: run supabase/add-dynamic-measurements.sql once, then try again."
+            : message);
+    } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
     }
-
-    entityModal.hide();
-    showToast(`${meta.title} ${appState.editingId ? "updated" : "added"} successfully.`);
-    await loadAllData();
-    navigateTo(meta.section);
 }
 
 async function deleteEntity(entity, id) {
     const meta = entityMeta[entity];
     if (!meta || !window.confirm(`Delete this ${meta.title.toLowerCase()}? This cannot be undone.`)) return;
 
-    const { error } = await supabaseClient.from(meta.table).delete().eq("id", id);
-    if (error) {
-        showError(error.message);
-        return;
-    }
+    try {
+        const { error } = await withTimeout(supabaseClient.from(meta.table).delete().eq("id", id));
+        if (error) throw error;
 
-    showToast(`${meta.title} deleted.`);
-    await loadAllData();
+        const failures = await loadAllData();
+        showToast(`${meta.title} deleted.`);
+        if (failures.length) showError("The record was deleted, but the latest data could not be reloaded. Tap Refresh to try again.");
+    } catch (error) {
+        console.error(`Could not delete ${entity}:`, error);
+        showError(error?.message || `Could not delete this ${meta.title.toLowerCase()}.`);
+    }
 }
 
 function navigateTo(section) {
@@ -678,7 +777,7 @@ function navigateTo(section) {
     const [label, entity] = actionMap[section];
     const primaryAction = document.getElementById("primaryAction");
     primaryAction.textContent = label;
-    primaryAction.dataset.entity = entity;
+    primaryAction.dataset.openEntity = entity;
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -691,16 +790,37 @@ function closeSidebar() {
 
 function bindEvents() {
     document.addEventListener("click", (event) => {
-        const navButton = event.target.closest("[data-section]");
-        const sectionLink = event.target.closest("[data-go-section]");
-        const openButton = event.target.closest("[data-open-entity]");
-        const rowButton = event.target.closest("[data-action]");
+        const button = event.target.closest("button");
+        if (!button) return;
 
-        if (navButton) navigateTo(navButton.dataset.section);
-        if (sectionLink) navigateTo(sectionLink.dataset.goSection);
-        if (openButton) openEntityModal(openButton.dataset.openEntity);
-        if (rowButton?.dataset.action === "edit") openEntityModal(rowButton.dataset.entity, rowButton.dataset.id);
-        if (rowButton?.dataset.action === "delete") deleteEntity(rowButton.dataset.entity, rowButton.dataset.id);
+        if (button.dataset.section) {
+            navigateTo(button.dataset.section);
+            return;
+        }
+
+        if (button.dataset.goSection) {
+            navigateTo(button.dataset.goSection);
+            return;
+        }
+
+        if (button.dataset.openEntity) {
+            openEntityModal(button.dataset.openEntity);
+            return;
+        }
+
+        if (button.dataset.action === "edit") {
+            openEntityModal(button.dataset.entity, button.dataset.id);
+            return;
+        }
+
+        if (button.dataset.action === "delete") {
+            deleteEntity(button.dataset.entity, button.dataset.id);
+            return;
+        }
+
+        if (button.dataset.systemAction === "refresh") {
+            refreshData(button);
+        }
     });
 
     document.addEventListener("change", (event) => {
@@ -709,7 +829,6 @@ function bindEvents() {
         if (container) container.innerHTML = renderDynamicMeasurementInputs(event.target.value);
     });
 
-    document.getElementById("primaryAction").addEventListener("click", (event) => openEntityModal(event.currentTarget.dataset.entity));
     document.getElementById("entityForm").addEventListener("submit", saveEntity);
     document.getElementById("globalSearch").addEventListener("input", (event) => {
         appState.search = event.target.value.trim();

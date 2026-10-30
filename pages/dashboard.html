@@ -66,7 +66,8 @@
                         <span aria-hidden="true">⌕</span>
                         <input id="globalSearch" type="search" placeholder="Search this page" aria-label="Search current page">
                     </label>
-                    <button class="btn btn-gold" id="primaryAction" type="button" data-entity="order">+ New order</button>
+                    <button class="btn btn-light border" id="refreshButton" type="button" data-system-action="refresh" aria-label="Refresh data">↻ <span class="d-none d-sm-inline">Refresh</span></button>
+                    <button class="btn btn-gold" id="primaryAction" type="button" data-open-entity="order">+ New order</button>
                 </div>
             </header>
 
@@ -201,13 +202,15 @@
                         <button class="btn btn-gold" type="button" data-open-entity="payment">+ Record payment</button>
                     </div>
                     <div class="row g-3 mb-4">
-                        <div class="col-sm-6"><article class="summary-card"><span>Total received</span><strong id="paymentTotal">Rs. 0</strong></article></div>
-                        <div class="col-sm-6"><article class="summary-card"><span>This month</span><strong id="paymentMonth">Rs. 0</strong></article></div>
+                        <div class="col-6 col-xl-3"><article class="summary-card"><span>Total collected</span><strong id="paymentTotal">Rs. 0</strong><small>All payments received</small></article></div>
+                        <div class="col-6 col-xl-3"><article class="summary-card advance"><span>Advances received</span><strong id="paymentAdvance">Rs. 0</strong><small id="paymentAdvanceCount">0 advance payments</small></article></div>
+                        <div class="col-6 col-xl-3"><article class="summary-card full"><span>Full payments</span><strong id="paymentFull">Rs. 0</strong><small id="paymentFullCount">0 full payments</small></article></div>
+                        <div class="col-6 col-xl-3"><article class="summary-card balance"><span>Balance payments</span><strong id="paymentBalance">Rs. 0</strong><small id="paymentBalanceCount">0 balance payments</small></article></div>
                     </div>
                     <article class="content-card">
                         <div class="table-responsive">
                             <table class="app-table">
-                                <thead><tr><th>Date</th><th>Customer</th><th>Order</th><th>Method</th><th>Amount</th><th></th></tr></thead>
+                                <thead><tr><th>Date</th><th>Paid by</th><th>Order</th><th>Payment type</th><th>Method</th><th>Amount</th><th></th></tr></thead>
                                 <tbody id="paymentsBody"></tbody>
                             </table>
                         </div>
@@ -234,7 +237,10 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form id="entityForm">
-                    <div class="modal-body" id="entityFormFields"></div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger d-none" id="entityFormError" role="alert"></div>
+                        <div id="entityFormFields"></div>
+                    </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-gold" id="saveEntityButton">Save</button>
